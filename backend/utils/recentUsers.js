@@ -1,16 +1,19 @@
-import fsp from 'fs/promises';
-import fs from 'fs';
 import cron from 'node-cron';
-import path from 'path';
+import { loadConfig, saveConfig } from './fileStorage.js';
 
-const recentPath = 'storage/recent.json';
+//load from MongoDB at startup (populated by loadRecent())
+let recent = {};
+let recentRealtime = {};
+let recentShared = {};
+let popup = [];
 
-//load from file
-let {recent,recentRealtime,recentShared,popup} = fs.existsSync(recentPath) ? JSON.parse(fs.readFileSync(recentPath)) : {recent:{},recentRealtime:{},recentShared:{},popup:[]};
-if(!recent) {recent = {};}
-if(!recentRealtime) {recentRealtime = {};}
-if(!recentShared) {recentShared = {};}
-if(!popup) {popup = [];}
+export async function loadRecent() {
+    const stored = await loadConfig('recent', {recent:{},recentRealtime:{},recentShared:{},popup:[]});
+    if(stored.recent) { Object.assign(recent, stored.recent); }
+    if(stored.recentRealtime) { Object.assign(recentRealtime, stored.recentRealtime); }
+    if(stored.recentShared) { Object.assign(recentShared, stored.recentShared); }
+    if(stored.popup) { popup.push(...stored.popup); }
+}
 
 const CRON_EXPRESSION = '0 1 * * *'; // every night at 1am
 cron.schedule(CRON_EXPRESSION, async () => {
@@ -20,14 +23,11 @@ cron.schedule(CRON_EXPRESSION, async () => {
     timezone: 'Etc/GMT+3',
 });
 
-setInterval(saveRecent,1000);
+setInterval(saveRecent, 1000);
 
-// save to file
+// save to MongoDB
 export async function saveRecent() {
-    const dirPath = path.dirname(recentPath);
-    await fsp.mkdir(dirPath, { recursive: true });
-    
-    await fsp.writeFile(recentPath,JSON.stringify({recent,recentRealtime,recentShared,popup}));
+    await saveConfig('recent', {recent, recentRealtime, recentShared, popup});
 }
 
 export function recordPopup(username) {

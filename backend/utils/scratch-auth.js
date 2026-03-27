@@ -1,5 +1,4 @@
-import fs from 'fs';
-export const freePassesPath = 'storage/freePasses.json';
+import { loadConfig, saveConfig } from './fileStorage.js';
 export const failedAuthLog = {};
 export const secondTimeSuccessAuthLog = {};
 const authProjects = JSON.parse(process.env.AUTH_PROJECTS);
@@ -159,7 +158,14 @@ async function getVerificationCloud(tempCode) {
 
 // export let freePasses = {} // username : passtime
 
-export let freePasses = fs.existsSync(freePassesPath) ? JSON.parse(fs.readFileSync(freePassesPath)) : {};
+export let freePasses = {};
+export async function loadFreePasses() {
+    const stored = await loadConfig('freePasses', {});
+    Object.assign(freePasses, stored);
+}
+export async function saveFreePasses() {
+    await saveConfig('freePasses', freePasses);
+}
 // grant temporary free verification to users if the livescratch server fails to verify
 export function grantFreePass(username) {
     console.error('granted free pass to user ' + username);
@@ -179,14 +185,14 @@ export function deleteFreePass(username) {
 }
 
 
-export function authenticate(username, token, bypassBypass) {
+export async function authenticate(username, token, bypassBypass) {
     if (!bypassBypass) { return true; }
     if(!username) { console.error(`undefined username attempted to authenticate with token ${token}`); return '*';}
-    let success = hasFreePass(username) || userManager.getUser(username).token == token;
+    let success = hasFreePass(username) || (await userManager.getUser(username)).token == token;
     if (success) {
         logAuth(username, true, 'authenticate');
         // mark as active
-        if(!hasFreePass(username)) { userManager.getUser(username).verified = true; }
+        if(!hasFreePass(username)) { (await userManager.getUser(username)).verified = true; }
     } else {
         logAuth(username, false, 'authenticate', `failed to authenticate with token "${token}"`);
         // console.error(`🟪 User Authentication failed for user: ${username}, bltoken: ${token}`)
@@ -197,13 +203,13 @@ export function authenticate(username, token, bypassBypass) {
 
 export let numWithCreds = 0;
 export let numWithoutCreds = 0;
-export function fullAuthenticate(username,token,lsId,bypassAuth) {
+export async function fullAuthenticate(username,token,lsId,bypassAuth) {
     if(token) {numWithCreds++;}
     else {numWithoutCreds++;}
     if(!username) { console.error(`undefined username attempted to authenticate on project ${lsId} with token ${token}`); username = '*';}
-    let userAuth = authenticate(username,token,bypassAuth);
+    let userAuth = await authenticate(username,token,bypassAuth);
     let isUserbypassAuth = (!bypassAuth);
-    let authAns = ((userAuth || isUserbypassAuth)) && (sessionManager.canUserAccessProject(username,lsId) ||
+    let authAns = ((userAuth || isUserbypassAuth)) && (await sessionManager.canUserAccessProject(username,lsId) ||
           admin.includes(username));
     if(!authAns && (userAuth || isUserbypassAuth)) {
         console.error(`🟪☔️ Project Authentication failed for user: ${username}, lstoken: ${token}, lsId: ${lsId}`);
