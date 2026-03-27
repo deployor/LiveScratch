@@ -9,6 +9,7 @@ module.exports = {
         {
             name: "LiveScratch",
             script: "./index.js",
+            interpreter: "bun",
             killTimeout: 60000,
             env: {
                 PORT: process.env.PORT,
