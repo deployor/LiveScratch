@@ -130,10 +130,9 @@ export default class UserManager {
         return Object.values((await this.getUser(username))?.sharedTo);
     }
     async getShared(username) {
-        let user = await this.getUser(username);
         let objs = await this.getSharedObjects(username);
         if (!objs) { return []; }
-        return objs.filter((proj) => (user.friends.indexOf(proj.from?.toLowerCase()) != -1)).map((proj) => (proj.id));
+        return objs.map((proj) => (proj.id));
     }
     async getAllProjects(username) {
         return (await this.getUser(username)).myProjects.concat(await this.getShared(username));

@@ -333,6 +333,11 @@ let blProjectDivs = {};
 let projectLoadFailed = false;
 async function onTabLoad() {
     blMySTuff = await getBlMyStuff();
+    if (!Array.isArray(blMySTuff)) {
+        console.error('invalid My Stuff response', blMySTuff);
+        projectLoadFailed = true;
+        blMySTuff = [];
+    }
     if (blMySTuff?.noauth) { projectLoadFailed = true; return false; }
     listenForObj('ul.media-list', (list) => {
         if (!document.querySelector('#tabs > li.first.active')) { return; } // return if "all projects" not selected
@@ -364,6 +369,10 @@ async function onTabLoad() {
 
 
 chrome.runtime.sendMessage(exId, { meta: 'getUsernamePlus' }, async (userData) => {
+    if (!userData) {
+        console.error('getUsernamePlus returned no data on My Stuff page');
+        return;
+    }
     if (!userData.currentBlToken) {
 
         let newVerified = false;

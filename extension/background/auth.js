@@ -2,7 +2,7 @@
 
 let currentBlToken = null;
 
-async function parseJsonResponse(response, label) {
+async function parseAuthJsonResponse(response, label) {
     const text = await response.text();
 
     try {
@@ -110,7 +110,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
                     let verifyResponse;
                     try{
-                        verifyResponse = await parseJsonResponse(
+                        verifyResponse = await parseAuthJsonResponse(
                             await fetch(`${apiUrl}/verify/start?code=${clientCode}`,{headers:{uname}}),
                             'verify/start',
                         );
@@ -141,7 +141,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     endVerifying(false);
                     recordVerifyError(res?.err);
                 }
-                let tokenResponse = await parseJsonResponse(
+                let tokenResponse = await parseAuthJsonResponse(
                     await fetch(`${apiUrl}/verify/userToken?code=${clientCode}`,{headers:{uname}}),
                     'verify/userToken',
                 );

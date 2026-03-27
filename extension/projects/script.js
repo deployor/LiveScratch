@@ -3,16 +3,37 @@ document.querySelector('#version').innerHTML = 'v'+version;
 
 async function getProjects() {
     let info = await chrome.runtime.sendMessage({meta:'getUsernamePlus'});
+    if (!info) {
+        console.error('projects page could not load auth info');
+        return;
+    }
     let apiUrl = info.apiUrl;
-    let blToken = info.token;
+    let blToken = info.currentBlToken;
     let uname = info.uname;
+
+    console.log('projects page auth info', { uname, hasToken: !!blToken, apiUrl });
  
-    var data = await (
-        await fetch(
-            `${apiUrl}/userProjectsScratch/${uname}/`,
-            {headers:{authorization:blToken}},
-        )
-    ).json();
+    let response = await fetch(
+        `${apiUrl}/userProjectsScratch/${uname}/`,
+        {headers:{authorization:blToken}},
+    );
+    let text = await response.text();
+    let data;
+    try {
+        data = JSON.parse(text);
+    } catch (error) {
+        console.error('projects page received non-JSON response', {
+            status: response.status,
+            url: response.url,
+            bodyStart: text.slice(0, 300),
+        });
+        return;
+    }
+    console.log('projects page data', data);
+    if (!Array.isArray(data)) {
+        console.error('projects page expected array data', data);
+        return;
+    }
     if (data.length === 0) {
         var span = document.createElement('span');
         span.className = 'title';

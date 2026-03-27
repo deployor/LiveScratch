@@ -23,6 +23,21 @@ const getStorageValue = (key) => {
     });
 };
 
+const parseJsonResponse = async (response, label) => {
+    const text = await response.text();
+
+    try {
+        return JSON.parse(text);
+    } catch (error) {
+        console.error(`${label} returned non-JSON response`, {
+            status: response.status,
+            url: response.url,
+            bodyStart: text.slice(0, 300),
+        });
+        throw error;
+    }
+};
+
 const getApiUrl = async () => {
     const customServer = await getStorageValue('custom-server');
 
@@ -36,17 +51,14 @@ const getApiUrl = async () => {
 
 let apiUrl;
 
-const loadUrl = () => {
-    return new Promise(async (resolve, reject) => {
-        try {
-            apiUrl = await getApiUrl();
-            resolve(); // Ensure this is final
-        } catch (error) {
-            console.error('Failed to get the API URL:', error);
-            apiUrl = 'https://scratchthing1.deployor.dev';
-            reject(error); // Only reject on actual failure
-        }
-    });
+const loadUrl = async () => {
+    try {
+        apiUrl = await getApiUrl();
+    } catch (error) {
+        console.error('Failed to get the API URL:', error);
+        apiUrl = 'https://scratchthing1.deployor.dev';
+        throw error;
+    }
 };
 
 loadUrl().then(()=>{
@@ -144,7 +156,10 @@ async function backgroundScript() {
 
         // dont redirect if is not /projects/id/...
         if (!id) { return false; }
-        let info = await (await fetch(apiUrl + `/userRedirect/${id}/${uname}`, { headers: { authorization: currentBlToken } })).json();
+        let info = await parseJsonResponse(
+            await fetch(apiUrl + `/userRedirect/${id}/${uname}`, { headers: { authorization: currentBlToken } }),
+            'userRedirect',
+        );
         // dont redirect if scratch id is not associated with ls project
         if (info.goto == 'none') { return false; }
         // dont redirect if already on project
@@ -232,7 +247,7 @@ async function backgroundScript() {
                 'X-Requested-With': 'XMLHttpRequest',
             },
         });
-        let json = await res.json();
+        let json = await parseJsonResponse(res, 'scratch session');
         if (!json.user) {
             signedin = false;
             return uname;
@@ -250,7 +265,10 @@ async function backgroundScript() {
 
     async function testVerification() {
         try {
-            let json = await (await fetch(`${apiUrl}/verify/test?username=${uname}`, { headers: { authorization: currentBlToken } })).json();
+            let json = await parseJsonResponse(
+                await fetch(`${apiUrl}/verify/test?username=${uname}`, { headers: { authorization: currentBlToken } }),
+                'verify/test',
+            );
             if (!json.verified) {
                 storeLivescratchToken(uname, null, true);
             }
@@ -303,7 +321,7 @@ async function backgroundScript() {
             return userExistsStore[username];
         } else {
             let res = await fetch(`${apiUrl}/userExists/${username}`);
-            let answer = await res.json();
+            let answer = await parseJsonResponse(res, 'userExists');
             console.log(answer);
             userExistsStore[username] = answer;
 
@@ -441,10 +459,24 @@ async function backgroundScript() {
                     //   sendResponse(await (await fetch(`${apiUrl}/projectInpoint/${request.blId}`)).json())
                 } else if (request.meta == 'getJson') {
                     try {
-                        sendResponse(await (await fetch(`${apiUrl}/projectJSON/${request.blId}?username=${uname}`, { headers: { authorization: currentBlToken } })).json());
+                        if (!request.blId) {
+                            sendResponse({ err: 'missing blId' });
+                            return;
+                        }
+                        sendResponse(await parseJsonResponse(
+                            await fetch(`${apiUrl}/projectJSON/${request.blId}?username=${uname}`, { headers: { authorization: currentBlToken } }),
+                            'projectJSON',
+                        ));
                     } catch (e) { sendResponse({ err: 'livescratch id does not exist' }); }
                 } else if (request.meta == 'getChanges') {
-                    sendResponse(await (await fetch(`${apiUrl}/changesSince/${request.blId}/${request.version}`, { headers: { authorization: currentBlToken, uname } })).json());
+                    if (!request.blId) {
+                        sendResponse([]);
+                        return;
+                    }
+                    sendResponse(await parseJsonResponse(
+                        await fetch(`${apiUrl}/changesSince/${request.blId}/${request.version}`, { headers: { authorization: currentBlToken, uname } }),
+                        'changesSince',
+                    ));
                 } else if (request.meta == 'getUsername') {
                     sendResponse(uname);
                 } else if (request.meta == 'getUsernamePlus') {
@@ -460,15 +492,25 @@ async function backgroundScript() {
                     // {meta:'projectSaved',blId,scratchId,version:blVersion}
                     fetch(`${apiUrl}/projectSavedJSON/${request.blId}/${request.version}`, { method: 'POST', body: request.json, headers: { 'Content-Type': 'application/json', authorization: currentBlToken, uname } });
                 } else if (request.meta == 'myStuff') {
-                    sendResponse(await (await fetch(`${apiUrl}/userProjectsScratch/${await makeSureUsernameExists()}`, { headers: { authorization: currentBlToken } })).json());
+                    sendResponse(await parseJsonResponse(
+                        await fetch(`${apiUrl}/userProjectsScratch/${await makeSureUsernameExists()}`, { headers: { authorization: currentBlToken } }),
+                        'userProjectsScratch',
+                    ));
                 } else if (request.meta == 'create') {
                     // sendResponse(await(await fetch(`${apiUrl}/newProject/${request.scratchId}/${await refreshUsername()}?title=${encodeURIComponent(request.title)}`)).json())
-                    sendResponse(await (await fetch(`${apiUrl}/newProject/${request.scratchId}/${await refreshUsername()}?title=${encodeURIComponent(request.title)}`,
-                        {
-                            method: 'POST',
-                            body: request.json,
-                            headers: { 'Content-Type': 'application/json', authorization: currentBlToken },
-                        }).then(res => res.json()).catch(e => ({ err: e.toString() }))));
+                    try {
+                        sendResponse(await parseJsonResponse(
+                            await fetch(`${apiUrl}/newProject/${request.scratchId}/${await refreshUsername()}?title=${encodeURIComponent(request.title)}`,
+                                {
+                                    method: 'POST',
+                                    body: request.json,
+                                    headers: { 'Content-Type': 'application/json', authorization: currentBlToken },
+                                }),
+                            'newProject',
+                        ));
+                    } catch (e) {
+                        sendResponse({ err: e.toString() });
+                    }
                 } else if (request.meta == 'shareWith') {
                     let response = await fetch(`${apiUrl}/share/${request.id}/${request.username}/${uname}?pk=${request.pk}`, {
                         method: 'PUT',
@@ -482,9 +524,23 @@ async function backgroundScript() {
                         headers: { authorization: currentBlToken, uname },
                     });
                 } else if (request.meta == 'getShared') {
-                    sendResponse(await (await fetch(`${apiUrl}/share/${request.id}`, { headers: { authorization: currentBlToken, uname } })).json());
+                    if (!request.id) {
+                        sendResponse([]);
+                        return;
+                    }
+                    sendResponse(await parseJsonResponse(
+                        await fetch(`${apiUrl}/share/${request.id}`, { headers: { authorization: currentBlToken, uname } }),
+                        'share',
+                    ));
                 } else if (request.meta == 'getTitle') {
-                    sendResponse((await (await fetch(`${apiUrl}/projectTitle/${request.blId}`, { headers: { authorization: currentBlToken, uname } })).json()).title);
+                    if (!request.blId) {
+                        sendResponse('');
+                        return;
+                    }
+                    sendResponse((await parseJsonResponse(
+                        await fetch(`${apiUrl}/projectTitle/${request.blId}`, { headers: { authorization: currentBlToken, uname } }),
+                        'projectTitle',
+                    )).title);
                 } else if (request.meta == 'leaveScratchId') {
                     fetch(`${apiUrl}/leaveScratchId/${request.scratchId}/${await refreshUsername()}`, {
                         method: 'PUT',
@@ -496,7 +552,14 @@ async function backgroundScript() {
                         headers: { authorization: currentBlToken },
                     });
                 } else if (request.meta == 'getActive') {
-                    sendResponse(await (await fetch(`${apiUrl}/active/${request.id}`, { headers: { authorization: currentBlToken, uname } })).json());
+                    if (!request.id) {
+                        sendResponse([]);
+                        return;
+                    }
+                    sendResponse(await parseJsonResponse(
+                        await fetch(`${apiUrl}/active/${request.id}`, { headers: { authorization: currentBlToken, uname } }),
+                        'active',
+                    ));
                 } else if (request.meta == 'getUrl') {
                     sendResponse(await chrome.runtime.getURL(request.for));
                 } else if (request.meta == 'isPingEnabled') {

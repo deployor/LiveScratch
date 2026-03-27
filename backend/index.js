@@ -359,6 +359,10 @@ async function finalSave(sm) {
         if(!await authenticate(req.params.user,req.headers.authorization)) {res.send({noauth:true}); return;}
 
         let livescratchIds = await userManager.getAllProjects(req.params.user);
+        console.log('userProjectsScratch lookup', {
+            user: req.params.user,
+            ids: livescratchIds,
+        });
         let projectsList = (await Promise.all(livescratchIds.map(async id=>{
             let projectObj = {};
             let project = await sessionManager.getProject(id);
@@ -373,6 +377,11 @@ async function finalSave(sm) {
 
             return projectObj;
         }))).filter(Boolean); // filter out non-existant projects // TODO: automatically delete dead pointers like this
+        console.log('userProjectsScratch result', {
+            user: req.params.user,
+            count: projectsList.length,
+            projects: projectsList.map(project => ({ blId: project.blId, scratchId: project.scratchId, title: project.title })),
+        });
         res.send(projectsList);
     });
 
@@ -420,6 +429,11 @@ async function finalSave(sm) {
         await sessionManager.shareProject(req.params.id, req.params.to, req.query.pk);
         (await userManager.getUser(req.params.to)).pk = req.query.pk;
         await userManager.share(req.params.to, req.params.id, req.params.from);
+        console.log('share success', {
+            id: req.params.id,
+            to: req.params.to,
+            from: req.params.from,
+        });
         res.send({ success: 'Project successfully shared.' });
     });
     app.put('/unshare/:id/:to/', async (req,res)=>{
