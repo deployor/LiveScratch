@@ -162,7 +162,6 @@ export function loadMapFromFolderRecursive(dir) {
 async function saveAsync(sessionManager) {
     if(isFinalSaving) {return;} // dont final save twice
 
-    console.log('saving now...');
     await sleep(10); // in case there is an error that nans lastid out
 
     const dirPath = path.dirname(lastIdPath);

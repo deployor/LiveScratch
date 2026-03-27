@@ -4,8 +4,8 @@ import { fileURLToPath } from 'url';
 
 const backendDir = dirname(fileURLToPath(import.meta.url));
 // Load backend-local .env first (takes priority), then fill missing vars from repo-root .env
-dotenv.config({ path: resolve(backendDir, '.env') });
-dotenv.config({ path: resolve(backendDir, '../.env') });
+dotenv.config({ path: resolve(backendDir, '.env'), quiet: true });
+dotenv.config({ path: resolve(backendDir, '../.env'), quiet: true });
 
 // be mindful of:
 // numbers being passed as strings
@@ -434,17 +434,43 @@ app.put('/unshare/:id/:to/',(req,res)=>{
 const port = process.env.PORT || 3000;
 httpServer.listen(port, '0.0.0.0', () => {
     const env = process.env.NODE_ENV || 'development';
+    const isProd = env === 'production';
     const sessionCount = Object.keys(sessionManager.livescratch || {}).length;
     const runtime = typeof Bun !== 'undefined'
         ? `Bun ${Bun.version}`
         : `Node.js ${process.version}`;
+    const memMB = (process.memoryUsage().rss / 1024 / 1024).toFixed(1);
+
+    // ANSI helpers
+    const c = {
+        reset:  '\x1b[0m',
+        bold:   '\x1b[1m',
+        dim:    '\x1b[2m',
+        green:  '\x1b[32m',
+        cyan:   '\x1b[36m',
+        yellow: '\x1b[33m',
+        red:    '\x1b[31m',
+        blue:   '\x1b[34m',
+        white:  '\x1b[97m',
+    };
+
+    const envLabel = isProd
+        ? `${c.green}${c.bold}production${c.reset}`
+        : `${c.yellow}${c.bold}development${c.reset}`;
+
+    const line = (label, value) =>
+        `  ${c.dim}│${c.reset}  ${c.bold}${label.padEnd(10)}${c.reset}${c.dim}:${c.reset}  ${value}`;
+
     console.log('');
-    console.log('🚀 LiveScratch backend started!');
-    console.log(`   Port:      ${port}`);
-    console.log(`   Env:       ${env}`);
-    console.log(`   Sessions:  ${sessionCount} loaded`);
-    console.log(`   Runtime:   ${runtime}`);
-    console.log(`   Started:   ${new Date().toISOString()}`);
+    console.log(`  ${c.cyan}${c.bold}🚀 LiveScratch backend started!${c.reset}`);
+    console.log(`  ${c.dim}${'─'.repeat(38)}${c.reset}`);
+    console.log(line('Port',     `${c.white}${port}${c.reset}`));
+    console.log(line('Env',      envLabel));
+    console.log(line('Sessions', `${c.white}${sessionCount} loaded${c.reset}`));
+    console.log(line('Runtime',  `${c.white}${runtime}${c.reset}`));
+    console.log(line('Memory',   `${c.white}${memMB} MB${c.reset}`));
+    console.log(line('Started',  `${c.white}${new Date().toISOString()}${c.reset}`));
+    console.log(`  ${c.dim}${'─'.repeat(38)}${c.reset}`);
     console.log('');
 });
 
