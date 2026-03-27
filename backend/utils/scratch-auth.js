@@ -111,7 +111,7 @@ export function setPaths(app, userManagerr, sessionManagerr) {
             delete pendingMap[clientCode];
 
             let username = cloud.user;
-            let token = userManagerr.getUser(username)?.token;
+            let token = (await userManagerr.getUser(username))?.token;
             if (!token) {
                 res.send({ err: 'user not found', username });
                 logAuth(username, false, 'verify', 'user not stored in database');

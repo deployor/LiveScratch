@@ -1,6 +1,22 @@
 
 
 let currentBlToken = null;
+
+async function parseJsonResponse(response, label) {
+    const text = await response.text();
+
+    try {
+        return JSON.parse(text);
+    } catch (error) {
+        console.error(`${label} returned non-JSON response`, {
+            status: response.status,
+            url: response.url,
+            bodyStart: text.slice(0, 300),
+        });
+        throw error;
+    }
+}
+
 async function getCurrentBlToken() {
     let username = await LIVESCRATCH.refreshUsername();
     let blToken = await getLivescratchToken(username);
@@ -71,7 +87,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     ;
     (async ()=>{
         if (request.meta == 'verify?') {
-            if(uname=='*') {return;} // dont verify if user is logged out
+            if(uname=='*') {
+                await LIVESCRATCH.refreshUsername?.(true);
+            }
+            if(uname=='*') {
+                console.log('verify aborted because Scratch username is still unavailable');
+                sendResponse(null);
+                return;
+            } // dont verify if user is logged out
             console.log('verify recieved');
             let token = await getCurrentBlToken();
             let freepassExpired = false;
@@ -87,11 +110,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
                     let verifyResponse;
                     try{
-                        verifyResponse = await (await fetch(`${apiUrl}/verify/start?code=${clientCode}`,{headers:{uname}})).json();
+                        verifyResponse = await parseJsonResponse(
+                            await fetch(`${apiUrl}/verify/start?code=${clientCode}`,{headers:{uname}}),
+                            'verify/start',
+                        );
                     } catch (e) {
                         console.error('verify init network request error');
+                        console.error(e);
                         chrome.storage.local.set({verifyServerConnErr:true});
-                        sendResponse(); // empty resposne means dont do it;
+                        sendResponse(null); // empty resposne means dont do it;
                         return;
                     }
                     chrome.storage.local.set({verifyServerConnErr:false});
@@ -114,7 +141,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     endVerifying(false);
                     recordVerifyError(res?.err);
                 }
-                let tokenResponse =  await (await fetch(`${apiUrl}/verify/userToken?code=${clientCode}`,{headers:{uname}})).json();
+                let tokenResponse = await parseJsonResponse(
+                    await fetch(`${apiUrl}/verify/userToken?code=${clientCode}`,{headers:{uname}}),
+                    'verify/userToken',
+                );
         
                 console.log('tokenResponse',tokenResponse);
                 if(tokenResponse.freepass) {
@@ -134,6 +164,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         } else if (request.meta == 'clearCrntToken') {
             await clearCurrentBlToken();
             sendResponse('success');
+        } else if (request.meta == 'verifyDebug') {
+            console.log('verifyDebug', request.stage, request.payload);
+            sendResponse('ok');
+        } else if (request.meta == 'setVerifyClientCode') {
+            clientCode = request.clientCode;
+            console.log('stored verify client code', clientCode);
+            sendResponse('ok');
         }
     })();
     return true;
