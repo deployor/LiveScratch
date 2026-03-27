@@ -358,9 +358,13 @@ async function finalSave(sm) {
     app.get('/userProjectsScratch/:user', async (req,res)=>{
         if(!await authenticate(req.params.user,req.headers.authorization)) {res.send({noauth:true}); return;}
 
-        let livescratchIds = await userManager.getAllProjects(req.params.user);
+        let ownedAndRecordedIds = await userManager.getAllProjects(req.params.user);
+        let sharedProjectIds = await sessionManager.getProjectsSharedWithUser(req.params.user);
+        let livescratchIds = Array.from(new Set([...(ownedAndRecordedIds || []), ...(sharedProjectIds || [])]));
         console.log('userProjectsScratch lookup', {
             user: req.params.user,
+            ownedAndRecordedIds,
+            sharedProjectIds,
             ids: livescratchIds,
         });
         let projectsList = (await Promise.all(livescratchIds.map(async id=>{

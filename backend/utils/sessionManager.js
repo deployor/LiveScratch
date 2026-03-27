@@ -760,4 +760,29 @@ export default class SessionManager {
         if(!project) {return true;}
         return project.isSharedWithCaseless(username);
     }
+
+    async getProjectsSharedWithUser(username) {
+        username = String(username).toLowerCase();
+        let ids = new Set();
+
+        Object.entries(this.livescratch).forEach(([id, project]) => {
+            if (project?.isSharedWithCaseless?.(username) && String(project.owner).toLowerCase() !== username) {
+                ids.add(String(id));
+            }
+        });
+
+        try {
+            const col = getCollection(livescratchPath);
+            const docs = await col.find({ 'data.sharedWith': { $elemMatch: { $regex: `^${username}$`, $options: 'i' } } }).toArray();
+            docs.forEach((doc) => {
+                if (doc?._id) {
+                    ids.add(String(doc._id));
+                }
+            });
+        } catch (e) {
+            console.error('getProjectsSharedWithUser failed', username, e);
+        }
+
+        return Array.from(ids);
+    }
 }
