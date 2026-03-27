@@ -539,7 +539,8 @@ export default class SessionManager {
         if (this.socketMap[socket.id].projects.indexOf(project.id) == -1) {
             this.socketMap[socket.id].projects.push(project.id);
         }
-        console.log(username + ' joined | blId: ' + id + ', scratchId: ' + project.scratchId);
+        const onlineAfterJoin = project.session.getConnectedUsernames().length;
+        console.log(`${username} joined | blId: ${id}, scratchId: ${project.scratchId} (${onlineAfterJoin} online)`);
     }
     leave(socket, id, voidMap) {
         let project = this.getProject(id);
@@ -557,7 +558,8 @@ export default class SessionManager {
             project.trimChanges();
             this.offloadProject(id);
         }
-        console.log(username + ' LEFT | blId: ' + id + ', scratchId: ' + project.scratchId);
+        const remainingAfterLeave = Object.keys(project.session.connectedClients).length;
+        console.log(`${username} LEFT  | blId: ${id}, scratchId: ${project.scratchId} (${remainingAfterLeave} remaining)`);
     }
 
     disconnectSocket(socket) {

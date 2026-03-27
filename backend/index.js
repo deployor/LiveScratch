@@ -511,3 +511,9 @@ process.on('SIGUSR2', exitHandler.bind(null, {exit:true}));
 
 //catches uncaught exceptions
 process.on('uncaughtException', exitHandler.bind(null, {exit:true}));
+
+// catches unhandled promise rejections (async errors that would otherwise be swallowed)
+process.on('unhandledRejection', (reason) => {
+    console.error('⚠️  Unhandled promise rejection:', reason);
+    exitHandler({ exit: true });
+});

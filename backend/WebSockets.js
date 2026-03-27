@@ -14,12 +14,18 @@ export default class initSockets {
 
         this.messageHandlers = {
             'joinSession':(data,client)=>{
-                if(!fullAuthenticate(data.username,data.token,data.id)) {client.send({noauth:true}); return;}
+                if(!fullAuthenticate(data.username,data.token,data.id)) {
+                    console.error(`🚫 joinSession auth failed  user=${data.username}  id=${data.id}`);
+                    client.send({noauth:true}); return;
+                }
     
                 this.sessionManager.join(client,data.id,data.username);
                 if(data.pk) { this.userManager.getUser(data.username).pk = data.pk; }
             },'joinSessions':(data,client)=>{
-                if(!fullAuthenticate(data.username,data.token,data.id)) {client.send({noauth:true}); return;}
+                if(!fullAuthenticate(data.username,data.token,data.id)) {
+                    console.error(`🚫 joinSessions auth failed  user=${data.username}  id=${data.id}`);
+                    client.send({noauth:true}); return;
+                }
     
                 data.ids.forEach(id=>{this.sessionManager.join(client,id,data.username);});
                 if(data.pk) { this.userManager.getUser(data.username).pk = data.pk; }
@@ -96,6 +102,10 @@ export default class initSockets {
     }
 
     onSocketConnection(client) {
+        const rawIp = client.handshake.headers['x-forwarded-for'] ?? client.handshake.address;
+        const ip = String(rawIp).split(',')[0].trim();
+        console.log(`🔌 socket connected    id=${client.id}  ip=${ip}`);
+
         client.on('message',(data,callback)=>{
             if(data.type in this.messageHandlers) {
 
@@ -113,10 +123,12 @@ export default class initSockets {
 
                 try{this.messageHandlers[data.type](data,client,callback);}
                 catch(e){console.error('error during messageHandler',e);}
-            } else { console.log('discarded unknown mesage type: ' + data.type); }
+            } else { console.log('discarded unknown message type: ' + data.type); }
         });
 
         client.on('disconnect',(reason)=>{
+            const username = this.sessionManager.socketMap[client.id]?.username ?? 'unknown';
+            console.log(`🔌 socket disconnected id=${client.id}  user=${username}  reason=${reason}`);
             this.sessionManager.disconnectSocket(client);
         });
     }

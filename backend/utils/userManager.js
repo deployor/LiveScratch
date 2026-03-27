@@ -64,6 +64,7 @@ export default class UserManager {
     addUser(username) {
         this.reloadUser(username);
         if (!(username?.toLowerCase() in this.users)) {
+            console.log(`🆕 new user: ${username}`);
             this.users[username.toLowerCase()] = { username, friends: [], token: this.token(), sharedTo: {}, myProjects: [], verified:false, privateMe: false }; // 🚨
         }
         return this.getUser(username);
