@@ -432,8 +432,21 @@ app.put('/unshare/:id/:to/',(req,res)=>{
 });
 
 const port = process.env.PORT || 3000;
-httpServer.listen(port,'0.0.0.0');
-console.log('listening http on port ' + port);
+httpServer.listen(port, '0.0.0.0', () => {
+    const env = process.env.NODE_ENV || 'development';
+    const sessionCount = Object.keys(sessionManager.livescratch || {}).length;
+    const runtime = typeof Bun !== 'undefined'
+        ? `Bun ${Bun.version}`
+        : `Node.js ${process.version}`;
+    console.log('');
+    console.log('🚀 LiveScratch backend started!');
+    console.log(`   Port:      ${port}`);
+    console.log(`   Env:       ${env}`);
+    console.log(`   Sessions:  ${sessionCount} loaded`);
+    console.log(`   Runtime:   ${runtime}`);
+    console.log(`   Started:   ${new Date().toISOString()}`);
+    console.log('');
+});
 
 
 // initial handshake:
