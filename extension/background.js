@@ -28,10 +28,10 @@ const getApiUrl = async () => {
 
     if (customServer) {
         const serverUrl = await getStorageValue('server-url');
-        return serverUrl || 'https://livescratchapi.waakul.com';
+        return serverUrl || 'https://scratchthing1.deployor.dev';
     }
 
-    return 'https://livescratchapi.waakul.com';
+    return 'https://scratchthing1.deployor.dev';
 };
 
 let apiUrl;
@@ -43,7 +43,7 @@ const loadUrl = () => {
             resolve(); // Ensure this is final
         } catch (error) {
             console.error('Failed to get the API URL:', error);
-            apiUrl = 'https://livescratchapi.waakul.com';
+            apiUrl = 'https://scratchthing1.deployor.dev';
             reject(error); // Only reject on actual failure
         }
     });

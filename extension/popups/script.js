@@ -6,7 +6,7 @@ chrome.storage.local.get('theme', (data) => {
 var version = chrome.runtime.getManifest().version_name;
 document.querySelector('#version').innerHTML = 'v'+version;
 
-document.getElementById('server-url').defaultValue = 'https://livescratchapi.waakul.com';
+document.getElementById('server-url').defaultValue = 'https://scratchthing1.deployor.dev';
 
 {
     (async () => {
@@ -22,7 +22,7 @@ document.getElementById('server-url').defaultValue = 'https://livescratchapi.waa
         const data = await chrome.storage.local.get('server-url');
         const serverUrlValue = data['server-url'];
 
-        document.getElementById('server-url').value = serverUrlValue || 'https://livescratchapi.waakul.com';
+        document.getElementById('server-url').value = serverUrlValue || 'https://scratchthing1.deployor.dev';
     })();
 }
 
@@ -78,7 +78,7 @@ chrome.runtime.sendMessage({ meta: 'getUsernamePlus' }, function (info) {
         chrome.storage.local.set({ 'custom-server': value });
         serverUrlField.disabled = !value;
     
-        if (serverUrlField.value!=='https://livescratchapi.waakul.com') {
+        if (serverUrlField.value!=='https://scratchthing1.deployor.dev') {
             chrome.runtime.sendMessage({meta: 'clearCrntToken'}, function(){
                 chrome.storage.local.remove(
                     [`blToken.${username}`, 'dontShowVerifyError', 'uname', 'upk', 'verifyServerConnErr'], 
@@ -100,16 +100,16 @@ chrome.runtime.sendMessage({ meta: 'getUsernamePlus' }, function (info) {
     document.querySelector('input#server-url')?.addEventListener('change', function () {
         value = document.querySelector('input#server-url').value;
         if (!value) {
-            document.querySelector('input#server-url').value = 'https://livescratchapi.waakul.com';
-            chrome.storage.local.set({'server-url': 'https://livescratchapi.waakul.com'});
+            document.querySelector('input#server-url').value = 'https://scratchthing1.deployor.dev';
+            chrome.storage.local.set({'server-url': 'https://scratchthing1.deployor.dev'});
         } else {
             valid = validateUrl(document.querySelector('input#server-url'));
             console.log(valid);
             if (valid) {
                 chrome.storage.local.set({'server-url': value});
             } else {
-                document.querySelector('input#server-url').value = 'https://livescratchapi.waakul.com';
-                chrome.storage.local.set({'server-url': 'https://livescratchapi.waakul.com'});
+                document.querySelector('input#server-url').value = 'https://scratchthing1.deployor.dev';
+                chrome.storage.local.set({'server-url': 'https://scratchthing1.deployor.dev'});
             }
         }
         chrome.sendMessage({meta: 'clearCrntToken'}, function(){

@@ -1,0 +1,17 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "${PORT:-3000}:${PORT:-3000}"
+    environment:
+      - PORT=${PORT:-3000}
+      - CHAT_WEBHOOK_URL=${CHAT_WEBHOOK_URL}
+      - ADMIN_USER=${ADMIN_USER}
+      - AUTH_PROJECTS=${AUTH_PROJECTS}
+      - ADMIN=${ADMIN}
+    volumes:
+      - backend-storage:/app/storage
+    restart: unless-stopped
+
+volumes:
+  backend-storage:
