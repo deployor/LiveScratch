@@ -26,6 +26,26 @@ function sleep(millis) {
     return new Promise(res => setTimeout(res, millis));
 }
 
+async function waitForVerificationCloud(tempCode, maxWaitMillis = 15000, stepMillis = 2500) {
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < maxWaitMillis) {
+        const cloud = await getVerificationCloud(tempCode);
+
+        if (cloud?.code == 'nocon') {
+            return cloud;
+        }
+
+        if (cloud && !cloud?.err) {
+            return cloud;
+        }
+
+        await sleep(stepMillis);
+    }
+
+    return null;
+}
+
 
 let idIndex = 0;
 export function getAuthStats() {
@@ -52,12 +72,17 @@ export function setPaths(app, userManagerr, sessionManagerr) {
         let clientCode = req.query.code;
         let verifyCode = generateAuthCode();
 
+        if (!clientCode) {
+            res.status(400).send({ err: 'no client code included' });
+            return;
+        }
+
         pendingMap[clientCode] = verifyCode;
         setTimeout(()=>{delete pendingMap[clientCode];},1000 * 60); // delete pending verifications after one minute
+        console.log(`issued verify code for ${debugUname}: project=${getAuthProjectId()} code=${verifyCode}`);
         res.send({ code: verifyCode, project: getAuthProjectId() });
     });
 
-    const CLOUD_WAIT = 1000 * 5;
     app.get('/verify/userToken', async (req, res) => { // ?code=000000&method=cloud|CLOUDs
         try {
             let clientCode = req.query.code;
@@ -69,12 +94,8 @@ export function setPaths(app, userManagerr, sessionManagerr) {
                 return;
             }
 
-            let cloud = await getVerificationCloud(tempCode);
-            if (!cloud || cloud?.err) {
-                console.log(`retrying... ${req.headers.uname}`);
-                await sleep(CLOUD_WAIT);
-                cloud = await getVerificationCloud();
-            }
+            console.log(`waiting for verification cloud for ${req.headers.uname}: code=${tempCode}`);
+            let cloud = await waitForVerificationCloud(tempCode);
             if (cloud?.code == 'nocon') {
                 grantFreePass(req.headers.uname);
                 logAuth(req.headers.uname, true, 'verify', 'server couldn\'t query cloud');
@@ -87,7 +108,7 @@ export function setPaths(app, userManagerr, sessionManagerr) {
                 return;
             }
             console.log('cloud', cloud);
-            delete pendingMap[tempCode];
+            delete pendingMap[clientCode];
 
             let username = cloud.user;
             let token = userManagerr.getUser(username)?.token;
@@ -102,7 +123,8 @@ export function setPaths(app, userManagerr, sessionManagerr) {
             logAuth(username, true, 'verify', 'success');
             return;
         } catch (err) {
-            next(err);
+            console.error('verification route failed', err);
+            res.status(500).send({ err: 'verification route failed' });
         }
     });
     app.post('/verify/recordError',(req,res)=>{
