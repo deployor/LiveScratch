@@ -12,6 +12,7 @@ module.exports = {
             interpreter: "bun",
             killTimeout: 60000,
             env: {
+                NODE_ENV: 'production',
                 PORT: process.env.PORT,
                 CHAT_WEBHOOK_URL: process.env.CHAT_WEBHOOK_URL,
                 ADMIN_USER: process.env.ADMIN_USER,
