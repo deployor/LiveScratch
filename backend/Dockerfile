@@ -8,5 +8,6 @@ RUN bun install --production
 COPY . .
 
 ENV PORT=3000
+ENV NODE_ENV=production
 
 CMD ["bun", "run", "index.js"]

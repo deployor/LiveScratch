@@ -17,7 +17,6 @@ export class Filter {
             const filePath = path.resolve(process.cwd(), 'utils', '_leetspeakMap.json'); // Adjust path as needed
             const data = fs.readFileSync(filePath, 'utf-8'); // Synchronously read the JSON file
             this.leetspeakMap = JSON.parse(data); // Parse and assign to the map
-            console.log('Leetspeak map loaded successfully:', this.leetspeakMap);
         } catch (error) {
             console.error('Error loading leetspeak map:', error.message);
             throw new Error('Failed to load leetspeak map');

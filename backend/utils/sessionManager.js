@@ -1,21 +1,9 @@
-import fs from 'fs';
-import fsp from 'fs/promises';
-import path, { sep } from 'path';
-import sanitize from 'sanitize-filename';
-import { livescratchPath, lastIdPath, saveMapToFolder, saveMapToFolderAsync, scratchprojectsPath } from './fileStorage.js';
+import { livescratchPath, scratchprojectsPath, saveMapToFolder, saveMapToFolderAsync } from './fileStorage.js';
+import { getCollection } from './db.js';
 import { Blob } from 'node:buffer';
 import { countPopup, countRecent, countRecentRealtime, countRecentShared, countUniquePopup } from './recentUsers.js';
 import { getAuthStats } from './scratch-auth.js';
 import { numWithCreds, numWithoutCreds } from './scratch-auth.js';
-
-const ensureDirectoryExistence = (filePath) => {
-    const dirname = path.dirname(filePath);
-    if (fs.existsSync(dirname)) {
-        return true;
-    } 
-    ensureDirectoryExistence(dirname);
-    fs.mkdirSync(dirname); 
-};
 
 const OFFLOAD_TIMEOUT_MILLIS = 45 * 1000; // you get two minutes before the project offloads
 
@@ -391,15 +379,14 @@ export default class SessionManager {
     }
 
     // Deprecated
-    offloadStaleProjects() {
-        Object.entries(this.livescratch).forEach(entry => {
-            let project = entry[1];
-            let id = entry[0];
+    // Deprecated
+    async offloadStaleProjects() {
+        for (const [id, project] of Object.entries(this.livescratch)) {
             if (Object.keys(project.session.connectedClients).length == 0) {
                 project.project.trimChanges(20);
-                this.offloadProject(id);
+                await this.offloadProject(id);
             }
-        });
+        }
     }
     finalSaveAllProjects() {
         Object.entries(this.livescratch).forEach(entry => {
@@ -419,42 +406,21 @@ export default class SessionManager {
         await saveMapToFolderAsync(this.livescratch, livescratchPath,false,true);
         this.livescratch = {};
     }
-    // Deprecated
-    async offloadStaleProjectsAsync() {
-        for (let entry of Object.entries(this.livescratch)) {
-            let project = entry[1];
-            let id = entry[0];
-            if (Object.keys(project.session.connectedClients).length == 0) {
-                project.project.trimChanges(20);
-                await this.offloadProjectAsync(id);
-            }
-        }
-    }
-    offloadProjectIfStale(id) {
+
+    async offloadProjectIfStale(id) {
         let project = this.livescratch[id];
         if (!project) { return; }
         if (Object.keys(project.session.connectedClients).length == 0) {
             project.trimChanges();
-            this.offloadProject(id);
+            await this.offloadProject(id);
         } else {
             this.renewOffloadTimeout(id);
         }
     }
-    offloadProject(id) {
+    async offloadProject(id) {
         try {
             // console.log('offloading project ' + id)
             this.livescratch[id]?.trimChanges();
-            let toSaveLivescratch = {};
-            toSaveLivescratch[id] = this.livescratch[id];
-            if (toSaveLivescratch[id]) { // only save it if there is actual data to save
-                saveMapToFolder(toSaveLivescratch, livescratchPath);
-            }
-            delete this.livescratch[id];
-        } catch (e) { console.error(e); }
-    }
-    async offloadProjectAsync(id) {
-        try {
-            // console.log('offloading project ' + id)
             let toSaveLivescratch = {};
             toSaveLivescratch[id] = this.livescratch[id];
             if (toSaveLivescratch[id]) { // only save it if there is actual data to save
@@ -463,74 +429,45 @@ export default class SessionManager {
             delete this.livescratch[id];
         } catch (e) { console.error(e); }
     }
-    reloadProject(id) {
-        id = sanitize(id + '');
-        let filename = livescratchPath + path.sep + id;
-        let d = null;
-        if (!(id in this.livescratch) && fs.existsSync(filename)) {
-            try {
-                d = fs.openSync(filename);
-                let file = fs.readFileSync(d);
-                fs.closeSync(d);
-
-                let json = JSON.parse(file);
-                let project = ProjectWrapper.fromJSON(json);
+    async reloadProject(id) {
+        if (!id) { return; }
+        id = String(id);
+        if (id in this.livescratch) { return; }
+        try {
+            const col = getCollection(livescratchPath);
+            const doc = await col.findOne({ _id: id });
+            if (doc) {
+                let project = ProjectWrapper.fromJSON(doc.data);
                 this.livescratch[id] = project;
                 console.log('reloaded livescratch ' + id);
-
-
-            } catch (e) {
-                // if(!id) {return}
-                console.error('reloadProject: couldn\'t read project with id: ' + id + '. err msg: ', e);
-
-                // if(d) {
-                //     try{fs.closeSync(d)}
-                //     catch(e) {console.error(e)}
-                // }
             }
-        }
-    }
-    async reloadProjectAsync(id) {
-
-        id = sanitize(id + '');
-        if (!(id in this.livescratch)) {
-            try {
-
-                let file = await fsp.readFile(livescratchPath + path.sep + id);
-
-                let json = JSON.parse(file);
-                let project = ProjectWrapper.fromJSON(json);
-                this.livescratch[id] = project;
-                console.log('reloaded livescratch ' + id);
-            } catch (e) {
-                // if(!id) {return}
-                console.error('reloadProject: couldn\'t read project with id: ' + id + '. err msg: ', e);
-            }
+        } catch (e) {
+            console.error('reloadProject: couldn\'t read project with id: ' + id + '. err msg: ', e);
         }
     }
 
-    linkProject(id, scratchId, owner, version) {
-        let project = this.getProject(id);
+    async linkProject(id, scratchId, owner, version) {
+        let project = await this.getProject(id);
         if (!project) { return; }
         project.linkProject(scratchId, owner, version);
         // this.scratchprojects[scratchId] = {owner,blId:id}
-        this.makeScratchProjectEntry(scratchId, owner, id);
+        await this.makeScratchProjectEntry(scratchId, owner, id);
     }
 
     // constructor(owner,scratchId,json,blId,title) {
-    newProject(owner, scratchId, json, title) {
-        if (this.doesScratchProjectEntryExist(scratchId)) { return this.getProject(this.getScratchProjectEntry(scratchId).blId); }
+    async newProject(owner, scratchId, json, title) {
+        if (await this.doesScratchProjectEntryExist(scratchId)) { return this.getProject((await this.getScratchProjectEntry(scratchId)).blId); }
         let id = String(this.getNextId());
         let project = new ProjectWrapper(owner, scratchId, json, id, title);
         this.livescratch[id] = project;
-        this.makeScratchProjectEntry(scratchId, owner, id);
+        await this.makeScratchProjectEntry(scratchId, owner, id);
         // this.scratchprojects[scratchId] = {owner,blId:id}
 
         return project;
     }
 
-    join(socket, id, username) {
-        let project = this.getProject(id);
+    async join(socket, id, username) {
+        let project = await this.getProject(id);
         if (!project) { return; }
         project.joinSession(socket, username);
         if (!(socket.id in this.socketMap)) {
@@ -539,10 +476,11 @@ export default class SessionManager {
         if (this.socketMap[socket.id].projects.indexOf(project.id) == -1) {
             this.socketMap[socket.id].projects.push(project.id);
         }
-        console.log(username + ' joined | blId: ' + id + ', scratchId: ' + project.scratchId);
+        const onlineAfterJoin = project.session.getConnectedUsernames().length;
+        console.log(`${username} joined | blId: ${id}, scratchId: ${project.scratchId} (${onlineAfterJoin} online)`);
     }
-    leave(socket, id, voidMap) {
-        let project = this.getProject(id);
+    async leave(socket, id, voidMap) {
+        let project = await this.getProject(id);
         if (!project) { return; }
         let username = project.session.removeClient(socket.id);
         if (socket.id in this.socketMap && !voidMap) {
@@ -555,23 +493,26 @@ export default class SessionManager {
         }
         if (Object.keys(project.session.connectedClients).length == 0) {
             project.trimChanges();
-            this.offloadProject(id);
+            await this.offloadProject(id);
         }
-        console.log(username + ' LEFT | blId: ' + id + ', scratchId: ' + project.scratchId);
+        const remainingAfterLeave = Object.keys(project.session.connectedClients).length;
+        console.log(`${username} LEFT  | blId: ${id}, scratchId: ${project.scratchId} (${remainingAfterLeave} remaining)`);
     }
 
-    disconnectSocket(socket) {
+    async disconnectSocket(socket) {
         if (!(socket.id in this.socketMap)) { return; }
-        this.socketMap[socket.id].projects.forEach(projectId => { this.leave(socket, projectId, true); });
+        for (const projectId of this.socketMap[socket.id].projects) {
+            await this.leave(socket, projectId, true);
+        }
         delete this.socketMap[socket.id];
     }
 
-    projectChange(blId, data, socket) {
-        this.getProject(blId)?.session.onProjectChange(socket, data.msg);
+    async projectChange(blId, data, socket) {
+        (await this.getProject(blId))?.session.onProjectChange(socket, data.msg);
     }
 
-    getVersion(blId) {
-        return this.getProject(blId)?.project.version;
+    async getVersion(blId) {
+        return (await this.getProject(blId))?.project.version;
     }
 
     getNextId() {
@@ -581,14 +522,13 @@ export default class SessionManager {
     }
 
     tryWriteLastId() {
-        try {
-            fs.writeFile(lastIdPath, this.lastId.toString(), () => { });
-        } catch (e) { console.error(e); }
+        // fire and forget – non-critical
+        import('./fileStorage.js').then(m => m.saveConfig('lastId', this.lastId)).catch(e => console.error(e));
     }
 
     // todo checking
-    attachScratchProject(scratchId, owner, livescratchId) {
-        this.makeScratchProjectEntry(scratchId, owner, livescratchId);
+    async attachScratchProject(scratchId, owner, livescratchId) {
+        await this.makeScratchProjectEntry(scratchId, owner, livescratchId);
         // this.scratchprojects[scratchId] = {owner,blId:livescratchId}
     }
 
@@ -603,35 +543,26 @@ export default class SessionManager {
 
     }
 
-    getProject(blId) {
-        this.renewOffloadTimeout(blId);
-        this.reloadProject(blId);
-        return this.livescratch[blId];
-    }
-    async getProjectAsync(blId) { // untested attempt to avoid too many files open in node version 17.9.1
+    async getProject(blId) {
         this.renewOffloadTimeout(blId);
         await this.reloadProject(blId);
         return this.livescratch[blId];
     }
-    shareProject(id, user, pk) {
+    async shareProject(id, user, pk) {
         console.log(`sessMngr: sharing ${id} with ${user} (usrId ${pk})`);
-        let project = this.getProject(id);
+        let project = await this.getProject(id);
         if (!project) { return; }
         project.sharedWith.push(user);
     }
-    unshareProject(id, user) {
+    async unshareProject(id, user) {
         console.log(`sessMngr: unsharing ${id} with ${user}`);
-        let project = this.getProject(id);
+        let project = await this.getProject(id);
         if (!project) { return; }
 
         project.linkedWith.filter(proj => (proj.owner.toLowerCase() == user.toLowerCase())).forEach(proj => {
             project.linkedWith.splice(project.linkedWith.indexOf(proj));
             this.deleteScratchProjectEntry(proj.scratchId);
             // delete this.scratchprojects[proj.scratchId]
-            // let projectPatch = scratchprojectsPath + path.sep + sanitize(proj.scratchId + '');
-            // if(fs.existsSync(projectPatch)) {
-            //     try{ fs.rmSync(projectPatch) } catch(e){console.error(e)} 
-            // }
         });
 
         if (project.owner.toLowerCase() == user.toLowerCase()) {
@@ -645,62 +576,57 @@ export default class SessionManager {
 
         // delete the project file if no-one owns it
         if (project.onwer == '') {
-            this.deleteProjectFile(project.id);
+            await this.deleteProjectFile(project.id);
         }
         // TODO: Handle what-if their project is the inpoint?
     }
 
-    deleteProjectFile(id) {
+    async deleteProjectFile(id) {
         console.log(`deleting 🚮 project file with id ${id}`);
 
-        this.offloadProject(id);
-        let projectPath = livescratchPath + path.sep + sanitize(id);
-        if (fs.existsSync(projectPath)) {
-            try { fs.rmSync(projectPath); } catch (e) { console.error('error when deleting project file after unsharing with everyone', e); }
-        }
+        await this.offloadProject(id);
+        // also delete from MongoDB
+        try {
+            const col = getCollection(livescratchPath);
+            await col.deleteOne({ _id: String(id) });
+        } catch (e) { console.error('error when deleting project from MongoDB', e); }
     }
 
-    getScratchToLSProject(scratchId) {
-        let blId = this.getScratchProjectEntry(scratchId)?.blId;
+    async getScratchToLSProject(scratchId) {
+        let blId = (await this.getScratchProjectEntry(scratchId))?.blId;
         if (!blId) { return null; }
         return this.getProject(blId);
     }
 
-    getScratchProjectEntry(scratchId) {
+    async getScratchProjectEntry(scratchId) {
+        try {
+            if (!scratchId) { return null; }
+            const col = getCollection(scratchprojectsPath);
+            const doc = await col.findOne({ _id: String(scratchId) });
+            return doc ? doc.data : null;
+        } catch (e) { console.error(e); return null; }
+    }
+    async makeScratchProjectEntry(scratchId, owner, blId) {
         try {
             if (!scratchId) { return; }
-            let scratchIdFilename = sanitize(scratchId + '');
-            let filename = scratchprojectsPath + path.sep + scratchIdFilename;
-            if (!fs.existsSync(filename)) { return null; }
-            let file = fs.readFileSync(filename);
-            let entry = JSON.parse(file);
-            return entry;
+            const col = getCollection(scratchprojectsPath);
+            const entry = { owner, blId };
+            await col.updateOne({ _id: String(scratchId) }, { $set: { _id: String(scratchId), data: entry } }, { upsert: true });
         } catch (e) { console.error(e); }
     }
-    makeScratchProjectEntry(scratchId, owner, blId) {
-        try {
-            if (!scratchId) { return; }
-            let scratchIdFilename = sanitize(scratchId + '');
-            let filename = scratchprojectsPath + path.sep + scratchIdFilename;
-            let entry = { owner, blId };
-            let fileData = JSON.stringify(entry);
-            ensureDirectoryExistence(filename);
-            fs.writeFileSync(filename, fileData);
-        } catch (e) { console.error(e); }
-    }
-    doesScratchProjectEntryExist(scratchId) {
+    async doesScratchProjectEntryExist(scratchId) {
         if (!scratchId) { return false; }
-        let scratchIdFilename = sanitize(scratchId + '');
-        let filename = scratchprojectsPath + path.sep + scratchIdFilename;
-        return fs.existsSync(filename);
+        const col = getCollection(scratchprojectsPath);
+        const count = await col.countDocuments({ _id: String(scratchId) });
+        return count > 0;
     }
-    deleteScratchProjectEntry(scratchId) {
+    async deleteScratchProjectEntry(scratchId) {
         console.log(`DELETING scratch project entry ${scratchId}`);
         if (!scratchId) { return; }
-        if (!this.doesScratchProjectEntryExist(scratchId)) { return; }
-        let scratchIdFilename = sanitize(scratchId + '');
-        let filename = scratchprojectsPath + path.sep + scratchIdFilename;
-        fs.rmSync(filename);
+        try {
+            const col = getCollection(scratchprojectsPath);
+            await col.deleteOne({ _id: String(scratchId) });
+        } catch (e) { console.error(e); }
     }
 
     // if 'from' is null, defaults to 'Livescratch'
@@ -717,7 +643,7 @@ export default class SessionManager {
         });
     }
 
-    getStats() {
+    async getStats() {
         let set1 = new Set();
         let set2 = new Set();
         let aloneSet = new Set();
@@ -820,8 +746,8 @@ export default class SessionManager {
         stats.popup1month = countPopup(30);
         stats.popupUnique24hr = countUniquePopup(1);
         stats.popupUnique1week = countUniquePopup(7);
-        stats.monthlyProjects = fs.readdirSync(livescratchPath).length;
-        stats.monthlyScratchIds = fs.readdirSync(scratchprojectsPath).length;
+        stats.monthlyProjects = await getCollection(livescratchPath).countDocuments();
+        stats.monthlyScratchIds = await getCollection(scratchprojectsPath).countDocuments();
 
         stats.auth = getAuthStats();
         stats.auth.numWithCreds = numWithCreds;
@@ -829,8 +755,8 @@ export default class SessionManager {
         return stats;
     }
 
-    canUserAccessProject(username,blId) {
-        let project = this.getProject(blId);
+    async canUserAccessProject(username,blId) {
+        let project = await this.getProject(blId);
         if(!project) {return true;}
         return project.isSharedWithCaseless(username);
     }
