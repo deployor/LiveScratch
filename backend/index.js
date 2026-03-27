@@ -1,4 +1,11 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const backendDir = dirname(fileURLToPath(import.meta.url));
+// Load backend-local .env first (takes priority), then fill missing vars from repo-root .env
+dotenv.config({ path: resolve(backendDir, '.env') });
+dotenv.config({ path: resolve(backendDir, '../.env') });
 
 // be mindful of:
 // numbers being passed as strings
@@ -424,7 +431,7 @@ app.put('/unshare/:id/:to/',(req,res)=>{
     res.send({ success: 'Project successfully unshared.' });
 });
 
-const port = process.env.PORT;
+const port = process.env.PORT || 3000;
 httpServer.listen(port,'0.0.0.0');
 console.log('listening http on port ' + port);
 
