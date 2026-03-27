@@ -1,17 +1,25 @@
 services:
   backend:
     build: ./backend
+    init: true
     ports:
-      - "${PORT:-3000}:${PORT:-3000}"
+      - "${HOST_PORT:-3000}:3000"
+    env_file:
+      - path: .env
+        required: false
+      - path: backend/.env
+        required: false
     environment:
-      - PORT=${PORT:-3000}
-      - CHAT_WEBHOOK_URL=${CHAT_WEBHOOK_URL}
-      - ADMIN_USER=${ADMIN_USER}
-      - AUTH_PROJECTS=${AUTH_PROJECTS}
-      - ADMIN=${ADMIN}
+      - PORT=3000      # must match the container port in 'ports' above
+      - NODE_ENV=production
     volumes:
       - backend-storage:/app/storage
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   backend-storage:

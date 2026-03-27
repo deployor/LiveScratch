@@ -7,4 +7,6 @@ RUN npm install --omit=dev
 
 COPY . .
 
-CMD ["node", "index.js"]
+ENV PORT=3000
+
+CMD ["node", "--enable-source-maps", "index.js"]
